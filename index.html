@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watsonx AI 3D Terminal</title>
+    <style>
+        body { 
+            margin: 0; overflow: hidden; background-color: #0a0a0a; 
+            color: #fff; font-family: 'Courier New', Courier, monospace; 
+            display: flex; height: 100vh;
+        }
+        #canvas-container { flex: 1; }
+        #chat-container { 
+            width: 450px; /* Widened the terminal */
+            padding: 30px; /* Increased outer padding */
+            background: #111; 
+            border-left: 1px solid #333; display: flex; flex-direction: column; 
+        }
+        h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            letter-spacing: 1px;
+        }
+        #chat-history { 
+            flex: 1; overflow-y: auto; margin-bottom: 20px; 
+            padding: 20px; background: #000; border: 1px solid #333; 
+            line-height: 1.6; /* Added line height for readability */
+        }
+        .user-msg { 
+            color: #aaa; 
+            margin-bottom: 25px; /* Added more space between blocks */
+            padding-bottom: 10px;
+            border-bottom: 1px dashed #222; /* Visual separator */
+        }
+        .ai-msg { 
+            color: #00ffcc; 
+            margin-bottom: 25px; 
+            white-space: pre-wrap; 
+        }
+        input { 
+            padding: 15px; background: #000; color: #fff; border: 1px solid #333; 
+            outline: none; font-family: 'Courier New', Courier, monospace; 
+            font-size: 15px;
+        }
+        button { 
+            padding: 15px; margin-top: 15px; background: #333; color: #fff; 
+            border: 1px solid #555; cursor: pointer; transition: 0.2s; 
+            font-size: 15px; text-transform: uppercase; letter-spacing: 1px;
+        }
+        button:hover { background: #00ffcc; color: #000; }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="chat-container">
+        <h2>System Terminal</h2>
+        <div id="chat-history"></div>
+        <input type="text" id="user-input" placeholder="Enter command...">
+        <button onclick="sendMessage()">Transmit</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // --- Three.js Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, (window.innerWidth - 400) / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        
+        renderer.setSize(window.innerWidth - 400, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const geometry = new THREE.IcosahedronGeometry(1.5, 1);
+        const material = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
+        const aiCore = new THREE.Mesh(geometry, material);
+        scene.add(aiCore);
+        camera.position.z = 4;
+
+        let isThinking = false;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            // Spin slowly normally, spin fast when thinking
+            aiCore.rotation.y += isThinking ? 0.05 : 0.005;
+            aiCore.rotation.x += isThinking ? 0.05 : 0.005;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- Chat Interface Logic ---
+        async function sendMessage() {
+            const inputField = document.getElementById('user-input');
+            const chatHistory = document.getElementById('chat-history');
+            const message = inputField.value;
+            
+            if (!message) return;
+
+            // Display user message
+            chatHistory.innerHTML += `<div class="user-msg"><b>> You:</b> ${message}</div>`;
+            inputField.value = '';
+            
+            // Trigger 3D animation state
+            isThinking = true;
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+                
+                const data = await response.json();
+                
+                if (data.reply) {
+                    chatHistory.innerHTML += `<div class="ai-msg"><b>> AI:</b> ${data.reply}</div>`;
+                } else if (data.error) {
+                    // NEW: Display the exact Python error in red
+                    chatHistory.innerHTML += `<div class="ai-msg" style="color: red;">> Backend Error: ${data.error}</div>`;
+                } else {
+                    chatHistory.innerHTML += `<div class="ai-msg" style="color: red;">> Error: Data format invalid.</div>`;
+                }
+            } catch (error) {
+                chatHistory.innerHTML += `<div class="ai-msg" style="color: red;">> Error: Connection to Nexus failed. Is app.py running?</div>`;
+            }
+            
+            isThinking = false;
+            chatHistory.scrollTop = chatHistory.scrollHeight; // Auto-scroll to bottom
+        }
+
+        // Allow pressing Enter to send
+        document.getElementById('user-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>
