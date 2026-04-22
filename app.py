@@ -11,7 +11,8 @@ model_id = "ibm/granite-8b-code-instruct"
 
 gen_params = {
     "max_new_tokens": 300,
-    "temperature": 0.7
+    "temperature": 0.7,
+    "stop_sequences": ["\nUser:", "User:"] # Tells the AI to shut up when its turn is over
 }
 
 # We will store the AI model here once it is initialized
