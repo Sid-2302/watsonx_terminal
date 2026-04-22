@@ -50,4 +50,7 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # Render assigns a dynamic port. If testing locally, it defaults to 5000.
+    port = int(os.environ.get("PORT", 5000))
+    # host='0.0.0.0' exposes the server to the internet so Render can see it
+    app.run(host='0.0.0.0', port=port)
