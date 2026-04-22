@@ -4,31 +4,41 @@ from flask_cors import CORS
 from ibm_watsonx_ai.foundation_models import ModelInference
 
 app = Flask(__name__)
-# Enable CORS so our frontend can communicate with this API
 CORS(app) 
 
-# IBM Cloud Credentials
-credentials = {
-    "url": "https://au-syd.ml.cloud.ibm.com",
-    "apikey": os.environ.get("WATSONX_API_KEY") 
-}
 project_id = "96bb60dc-c214-4680-98b8-a0ddfe811e70"
 model_id = "ibm/granite-8b-code-instruct"
-
-# Initialize Model
-model = ModelInference(
-    model_id=model_id,
-    credentials=credentials,
-    project_id=project_id
-)
 
 gen_params = {
     "max_new_tokens": 300,
     "temperature": 0.7
 }
 
+# We will store the AI model here once it is initialized
+watson_model = None 
+
+def init_model():
+    """Initializes the connection to IBM only when needed."""
+    raw_key = os.environ.get("WATSONX_API_KEY")
+    
+    if not raw_key:
+        raise ValueError("The WATSONX_API_KEY is completely missing from the environment.")
+        
+    credentials = {
+        "url": "https://au-syd.ml.cloud.ibm.com",
+        "apikey": raw_key.strip() # .strip() removes accidental copy-paste spaces
+    }
+    
+    return ModelInference(
+        model_id=model_id,
+        credentials=credentials,
+        project_id=project_id
+    )
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
+    global watson_model
+    
     data = request.json
     user_input = data.get("message", "")
     
@@ -36,21 +46,20 @@ def chat():
         return jsonify({"error": "No message provided"}), 400
 
     try:
-        # Ask the Watsonx model
-        # Ask the Watsonx model
+        # Lazy Initialization: Connect to IBM on the first chat request
+        if watson_model is None:
+            watson_model = init_model()
+            
         prompt = f"You are a helpful Computer Science tutor. Answer the following question.\n\nUser: {user_input}\nAI:"
-        response = model.generate_text(prompt=prompt, params=gen_params)
+        response = watson_model.generate_text(prompt=prompt, params=gen_params)
         
-        # Send the AI's reply back to the frontend
         return jsonify({"reply": response})
         
     except Exception as e:
-        # If IBM Cloud throws an error (like a bad API key), catch it here!
+        # If the key is bad, the server won't crash. It sends the error to the UI.
         print(f"Backend Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    # Render assigns a dynamic port. If testing locally, it defaults to 5000.
     port = int(os.environ.get("PORT", 5000))
-    # host='0.0.0.0' exposes the server to the internet so Render can see it
     app.run(host='0.0.0.0', port=port)
